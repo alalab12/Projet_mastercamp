@@ -12,12 +12,6 @@ Outil d'extraction, d'enrichissement et d'analyse des bulletins de sécurité pu
 Installer les dépendances :
 
 ```bash
-pip install -r requirements.txt
-```
-
-Si aucun `requirements.txt` n'est présent, installer manuellement :
-
-```bash
 pip install feedparser requests pandas matplotlib seaborn scikit-learn
 ```
 
@@ -38,11 +32,11 @@ projet/
 ├── cve_extraction.py            # Étape 2 : identification des CVE dans les bulletins
 ├── get_cve_score.py             # Étape 3 : enrichissement via MITRE et EPSS
 ├── dataframe.py                 # Étape 4 : consolidation en DataFrame pandas
-├── build_csv.py                 # Pipeline complet (mode local)
-├── main_test.py                 # Pipeline complet (mode remote, flux RSS live)
+├── build_csv.py                 # Pipeline complet (mode local, ~4000 bulletins)
+├── main_test.py                 # Pipeline complet (mode remote, 20 derniers bulletins)
 ├── alertes.py                   # Étape 7 : génération d'alertes et notifications email
 │
-├── donnees_enrichies.csv        # Fichier CSV généré par le pipeline
+├── donnees_enrichies.csv        # Fichier CSV fourni (généré via main_test.py, mode remote)
 ├── analyse.ipynb                # Notebook : visualisations + Machine Learning
 ├── analyse.html                 # Export HTML du notebook
 └── README.md
@@ -52,24 +46,35 @@ projet/
 
 ## Lancement
 
-### Mode local (recommandé)
+### Mode remote — flux RSS live (CSV fourni généré avec ce mode)
+
+Interroge directement les flux RSS de l'ANSSI et les API MITRE / EPSS.
+Récupère les **20 derniers bulletins** publiés. Un délai de 2 secondes entre chaque requête est appliqué automatiquement pour respecter les serveurs externes.
+
+```bash
+python main_test.py
+```
+
+Génère le fichier `donnees_enrichies.csv`.
+
+### Mode local — données complètes
 
 Utilise les données pré-téléchargées dans `data/` sans faire d'appels réseau.
+Traite l'ensemble des **4103 bulletins** disponibles (~300 000 lignes générées).
 
 ```bash
 python build_csv.py
 ```
 
-Génère le fichier `donnees_enrichies.csv`.
+> Le mode local peut prendre plusieurs minutes selon la machine.
 
-### Mode remote (flux RSS live)
+---
 
-Interroge directement les flux RSS de l'ANSSI et les API MITRE / EPSS.
-Un délai de 2 secondes entre chaque requête est appliqué automatiquement.
+## Le fichier CSV fourni
 
-```bash
-python main_test.py
-```
+Le fichier `donnees_enrichies.csv` inclus dans le zip a été généré en **mode remote** (`main_test.py`). Il contient les 20 derniers bulletins ANSSI enrichis avec les scores CVSS, EPSS et les types CWE issus des API MITRE et FIRST.
+
+Pour obtenir un dataset complet sur l'ensemble des bulletins historiques, utiliser `build_csv.py` en mode local.
 
 ---
 
@@ -85,14 +90,22 @@ Le notebook charge `donnees_enrichies.csv` et produit :
 
 - Distribution des scores CVSS et EPSS
 - Top 10 des éditeurs et produits les plus touchés
-- Scatter CVSS vs EPSS
+- Scatter CVSS vs EPSS coloré par sévérité
 - Répartition des niveaux de sévérité
 - Évolution temporelle des vulnérabilités
-- Heatmap des corrélations
+- Courbe cumulative des CVE
+- Heatmap des corrélations CVSS/EPSS
 - Boxplot CVSS par éditeur
-- Analyse par type CWE
-- Modèle non supervisé : clustering KMeans (avec validation silhouette)
-- Modèle supervisé : Random Forest (avec rapport de classification)
+- Analyse par type CWE (fréquence + CVSS moyen)
+- Avis vs Alertes par éditeur
+- Modèle non supervisé : clustering KMeans (validation elbow + silhouette)
+- Modèle supervisé : Random Forest (matrice de confusion + importance des variables)
+
+Exporter en HTML :
+
+```bash
+jupyter nbconvert --to html analyse.ipynb
+```
 
 ---
 
@@ -102,10 +115,10 @@ Le notebook charge `donnees_enrichies.csv` et produit :
 python alertes.py
 ```
 
-Filtre les CVE critiques selon deux seuils combinés :
+Filtre les CVE critiques selon deux seuils combinés (logique ET) :
 
-- Score CVSS ≥ 7.0
-- Score EPSS ≥ 0.3
+- Score CVSS ≥ 7.0 (faille grave)
+- Score EPSS ≥ 0.3 (probabilité d'exploitation réelle)
 
 L'envoi d'email est optionnel. Le sujet et le corps HTML du mail sont affichés dans la console même sans configuration SMTP.
 
@@ -124,9 +137,9 @@ envoyer_alerte_email(
 
 ---
 
-## Données
+## Données locales
 
-Le dossier `data/` est fourni directement dans le zip. Il contient des copies statiques des flux ANSSI et des réponses API, permettant de faire tourner le pipeline sans accès réseau et sans surcharger les serveurs externes.
+Le dossier `data/` est fourni dans le zip. Il contient des copies statiques des flux ANSSI et des réponses API pour faire tourner le pipeline sans accès réseau.
 
 | Dossier | Contenu |
 |---|---|
